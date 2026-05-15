@@ -1,0 +1,74 @@
+name: 构建 IPA
+
+on:
+  workflow_dispatch:    # 手动触发
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: 构建 iOS IPA
+    runs-on: macos-latest   # 使用 GitHub 免费提供的 macOS 云服务器
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 安装依赖
+        run: |
+          npm install
+          npm install -g cordova
+
+      - name: 添加 iOS 平台
+        run: cordova platform add ios --no-resources
+
+      - name: 构建 iOS 应用
+        run: |
+          cordova build ios --device --no-sign
+          echo "✅ 构建完成"
+
+      - name: 查找构建产物
+        id: find_build
+        run: |
+          # 查找 .app 文件
+          APP_PATH=$(find platforms/ios/build -name "*.app" -type d | head -1)
+          echo "找到 APP: $APP_PATH"
+          echo "app_path=$APP_PATH" >> $GITHUB_OUTPUT
+
+      - name: 打包为 IPA
+        run: |
+          APP_PATH="${{ steps.find_build.outputs.app_path }}"
+          if [ -z "$APP_PATH" ]; then
+            # 尝试从 xcarchive 查找
+            mkdir -p Payload
+            find platforms/ios -name "*.app" -type d -exec cp -R {} Payload/ \;
+          else
+            mkdir -p Payload
+            cp -R "$APP_PATH" Payload/
+          fi
+          
+          # 生成 IPA（未经签名，可用于 sideload）
+          zip -r AI智能预测.ipa Payload/
+          rm -rf Payload
+          
+          echo "✅ IPA 文件已生成"
+          ls -lh AI智能预测.ipa
+
+      - name: 上传 IPA 为构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: AI智能预测-IPA
+          path: AI智能预测.ipa
+          if-no-files-found: error
+
+      - name: 上传 dSYM（调试信息）
+        uses: actions/upload-artifact@v4
+        with:
+          name: AI智能预测-dSYM
+          path: platforms/ios/build/**/*.dSYM
+          if-no-files-found: ignore
