@@ -34,11 +34,10 @@
             align-items: center;
             justify-content: center;
             z-index: 9999;
-            transition: opacity 0.6s ease, transform 0.6s ease;
+            transition: opacity 0.5s ease;
         }
         #splash-screen.hidden {
             opacity: 0;
-            transform: scale(1.1);
             pointer-events: none;
         }
         
@@ -88,18 +87,6 @@
             to { transform: rotate(360deg); }
         }
         
-        /* WebView 容器 */
-        #webview-container {
-            width: 100%;
-            height: 100%;
-            position: relative;
-        }
-        #webview-container iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
-        
         /* 错误页面 */
         #error-page {
             display: none;
@@ -144,17 +131,6 @@
         #error-page button:active {
             transform: scale(0.95);
         }
-        
-        /* 底部安全区域 */
-        .safe-area-bottom {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            height: env(safe-area-inset-bottom, 0);
-            background: transparent;
-            z-index: 1;
-        }
     </style>
 </head>
 <body>
@@ -166,11 +142,6 @@
         <div class="loader"></div>
     </div>
     
-    <!-- WebView 容器 -->
-    <div id="webview-container">
-        <iframe id="app-frame" src="https://morgan666.top/" allow="geolocation *; microphone *; camera *"></iframe>
-    </div>
-    
     <!-- 错误页面 -->
     <div id="error-page">
         <div class="error-icon">📡</div>
@@ -179,35 +150,22 @@
         <button onclick="reloadApp()">重新加载</button>
     </div>
     
-    <!-- 安全区域 -->
-    <div class="safe-area-bottom"></div>
-    
     <script>
-        var iframe = document.getElementById('app-frame');
         var splash = document.getElementById('splash-screen');
         var errorPage = document.getElementById('error-page');
         var loadTimer = null;
-        var hasLoaded = false;
+        var TARGET_URL = 'https://morgan666.top/';
         
-        // 监听 iframe 加载完成
-        iframe.addEventListener('load', function() {
-            hasLoaded = true;
-            clearTimeout(loadTimer);
-            hideSplash();
-        });
+        // 显示启动屏至少 2 秒，然后直接导航到目标网站
+        // 使用直接导航（非 iframe）以支持复制、粘贴等原生功能
         
-        // 加载超时处理（10秒）
-        loadTimer = setTimeout(function() {
-            if (!hasLoaded) {
-                showError();
-            }
-        }, 10000);
-        
-        function hideSplash() {
+        function navigateToSite() {
             splash.classList.add('hidden');
             setTimeout(function() {
-                splash.style.display = 'none';
-            }, 600);
+                // 直接跳转到目标网站（非 iframe）
+                // 这样剪贴板 API (navigator.clipboard) 可以正常工作
+                window.location.href = TARGET_URL;
+            }, 500);
         }
         
         function showError() {
@@ -219,26 +177,38 @@
             errorPage.style.display = 'none';
             splash.style.display = 'flex';
             splash.classList.remove('hidden');
-            hasLoaded = false;
-            
-            iframe.src = iframe.src;
-            
-            loadTimer = setTimeout(function() {
-                if (!hasLoaded) {
-                    showError();
-                }
-            }, 10000);
+            navigateToSite();
         }
         
-        // 监听 Cordova 就绪事件
+        // 启动屏显示至少 2 秒，如果网站在此期间加载完成则提前跳转
+        var startTime = Date.now();
+        var minSplashTime = 2000; // 最小启动屏时间
+        
+        // 监听 Cordova 就绪
         document.addEventListener('deviceready', function() {
-            // 如果5秒内 iframe 还没加载，用默认超时
+            var elapsed = Date.now() - startTime;
+            var remaining = Math.max(0, minSplashTime - elapsed);
+            
             setTimeout(function() {
-                if (!hasLoaded) {
-                    showError();
-                }
-            }, 15000);
+                navigateToSite();
+            }, remaining);
         }, false);
+        
+        // 如果 deviceready 没触发（比如非 Cordova 环境），3 秒后自动跳转
+        setTimeout(function() {
+            var elapsed = Date.now() - startTime;
+            if (elapsed >= 2000) {
+                navigateToSite();
+            }
+        }, 3000);
+        
+        // 加载超时：10 秒后如果页面还没加载完成（但已经跳转了），显示错误
+        // 注意：window.location.href 跳转后，当前页面的脚本会继续执行一小段时间
+        // 所以这里用 onbeforeunload 检测跳转
+        window.addEventListener('beforeunload', function() {
+            // 页面即将跳转，清理定时器
+            clearTimeout(loadTimer);
+        });
     </script>
 </body>
 </html>
