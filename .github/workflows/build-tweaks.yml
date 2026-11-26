@@ -1,0 +1,89 @@
+name: Build Tweaks deb
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { project: HighEQReply, scheme: rootless }
+          - { project: HighEQReply, scheme: rootful }
+          - { project: DouyinEQ, scheme: rootless }
+          - { project: DouyinEQ, scheme: rootful }
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Theos
+        run: |
+          bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
+          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+
+      # Build-time layout: repo root is a flat mix of both tweaks; move files into place
+      - name: Layout HighEQReply (WeChat)
+        run: |
+          mkdir -p HighEQReply
+          cp Tweak.x HighEQReply.plist HighEQReply/
+          cat > HighEQReply/Makefile <<'EOF'
+TARGET := iphone:clang:latest:14.0
+INSTALL_TARGET_PROCESSES = WeChat
+include $(THEOS)/makefiles/common.mk
+TWEAK_NAME = HighEQReply
+HighEQReply_FILES = Tweak.x
+HighEQReply_FRAMEWORKS = UIKit Foundation
+HighEQReply_CFLAGS = -fobjc-arc
+include $(THEOS_MAKE_PATH)/tweak.mk
+EOF
+          cat > HighEQReply/control <<'EOF'
+Package: com.higheq.reply
+Name: HighEQReply
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: WeChat AI reply tweak
+Author: Morgan-m7
+Section: Tweaks
+EOF
+
+      - name: Layout DouyinEQ (Douyin)
+        run: |
+          mkdir -p DouyinEQ
+          cp DouyinTweak.x DouyinEQ.plist DouyinEQ/
+          cat > DouyinEQ/Makefile <<'EOF'
+TARGET := iphone:clang:latest:14.0
+INSTALL_TARGET_PROCESSES = Aweme
+include $(THEOS)/makefiles/common.mk
+TWEAK_NAME = DouyinEQ
+DouyinEQ_FILES = DouyinTweak.x
+DouyinEQ_FRAMEWORKS = UIKit Foundation
+DouyinEQ_CFLAGS = -fobjc-arc
+include $(THEOS_MAKE_PATH)/tweak.mk
+EOF
+          cat > DouyinEQ/control <<'EOF'
+Package: com.douyineq.reply
+Name: DouyinEQ
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: Douyin AI reply tweak
+Author: Morgan-m7
+Section: Tweaks
+EOF
+
+      - name: Build ${{ matrix.project }} (${{ matrix.scheme }})
+        run: |
+          cd ${{ matrix.project }}
+          make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=${{ matrix.scheme }}
+          echo "---- artifacts ----"
+          ls -la packages/
+
+      - name: Upload deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.project }}-${{ matrix.scheme }}
+          path: ${{ matrix.project }}/packages/*.deb
+          if-no-files-found: error
