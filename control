@@ -1,0 +1,7 @@
+Package: com.douyineq.reply
+Name: DouyinEQ
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: 抖音 AI 高情商回复插件（接住情绪/共鸣/引导型恋人/成熟稳重/去AI化）
+Author: WorkBuddy User
+Section: Tweaks
