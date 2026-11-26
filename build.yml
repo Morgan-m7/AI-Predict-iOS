@@ -1,0 +1,37 @@
+name: Build DouyinEQ deb
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        # rootless = Dopamine / palera1n 2.x (iOS 15+)
+        # rootful  = unc0ver / checkra1n 老越狱
+        scheme: [rootless, rootful]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Theos
+        run: |
+          bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
+          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+
+      - name: Build (${{ matrix.scheme }})
+        run: |
+          make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=${{ matrix.scheme }}
+          echo "---- 产物 ----"
+          ls -la packages/
+
+      - name: Upload deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: DouyinEQ-${{ matrix.scheme }}
+          path: packages/*.deb
+          if-no-files-found: error
